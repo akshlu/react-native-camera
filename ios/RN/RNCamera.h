@@ -27,6 +27,8 @@
 @property (assign, nonatomic) NSInteger flashMode;
 @property (assign, nonatomic) CGFloat zoom;
 @property (assign, nonatomic) NSInteger autoFocus;
+@property (copy, nonatomic) NSDictionary *focusPointOfInterest;
+@property (copy, nonatomic) NSDictionary *exposurePointOfInterest;
 @property (assign, nonatomic) float focusDepth;
 @property (assign, nonatomic) NSInteger whiteBalance;
 @property (nonatomic, assign, getter=isReadingBarCodes) BOOL barCodeReading;
@@ -36,6 +38,8 @@
 - (void)updateType;
 - (void)updateFlashMode;
 - (void)updateFocusMode;
+- (void)updateFocusPointOfInterest;
+- (void)updateExposurePointOfInterest;
 - (void)updateFocusDepth;
 - (void)updateZoom;
 - (void)updateWhiteBalance;

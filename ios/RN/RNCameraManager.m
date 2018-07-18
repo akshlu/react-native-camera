@@ -143,6 +143,18 @@ RCT_CUSTOM_VIEW_PROPERTY(focusDepth, NSNumber, RNCamera)
     [view updateFocusDepth];
 }
 
+RCT_CUSTOM_VIEW_PROPERTY(focusPointOfInterest, NSDictionary, RNCamera)
+{
+    [view setFocusPointOfInterest:[RCTConvert NSDictionary:json]];
+    [view updateFocusPointOfInterest];
+}
+
+RCT_CUSTOM_VIEW_PROPERTY(exposurePointOfInterest, NSDictionary, RNCamera)
+{
+    [view setExposurePointOfInterest:[RCTConvert NSDictionary:json]];
+    [view updateExposurePointOfInterest];
+}
+
 RCT_CUSTOM_VIEW_PROPERTY(zoom, NSNumber, RNCamera)
 {
     [view setZoom:[RCTConvert CGFloat:json]];

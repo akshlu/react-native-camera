@@ -180,6 +180,59 @@ static NSDictionary *defaultFaceDetectorOptions = nil;
     [device unlockForConfiguration];
 }
 
+- (void)updateFocusPointOfInterest {
+    AVCaptureDevice *device = [self.videoCaptureDeviceInput device];
+    NSError *error = nil;
+    
+    if (![device lockForConfiguration:&error]) {
+        if (error) {
+            RCTLogError(@"%s: %@", __func__, error);
+        }
+        return;
+    }
+    if ([self.focusPointOfInterest objectForKey:@"x"] && [self.focusPointOfInterest objectForKey:@"y"]) {
+        float x = [self.focusPointOfInterest[@"x"] floatValue];
+        float y = [self.focusPointOfInterest[@"y"] floatValue];
+        
+        if ([device isFocusModeSupported:AVCaptureFocusModeContinuousAutoFocus] && [device isFocusPointOfInterestSupported]) {
+            CGPoint autoFocusPoint = CGPointMake(x, y);
+            [device setFocusPointOfInterest:autoFocusPoint];
+            [device setFocusMode:AVCaptureFocusModeContinuousAutoFocus];
+        } else {
+            RCTLogWarn(@"Camera: doesn't support AVCaptureFocusModeContinuousAutoFocus");
+        }
+    }
+    [device unlockForConfiguration];
+    
+}
+
+-(void)updateExposurePointOfInterest {
+    AVCaptureDevice *device = [self.videoCaptureDeviceInput device];
+    NSError *error = nil;
+    
+    if (![device lockForConfiguration:&error]) {
+        if (error) {
+            RCTLogError(@"%s: %@", __func__, error);
+        }
+        return;
+    }
+    
+    if ([self.exposurePointOfInterest objectForKey:@"x"] && [self.exposurePointOfInterest objectForKey:@"y"]) {
+        float x = [self.exposurePointOfInterest[@"x"] floatValue];
+        float y = [self.exposurePointOfInterest[@"y"] floatValue];
+        
+        if ([device isExposurePointOfInterestSupported] && [device isExposureModeSupported:AVCaptureExposureModeAutoExpose]) {
+            CGPoint exposurePoint = CGPointMake(x, y);
+            [device setExposurePointOfInterest:exposurePoint];
+            [device setExposureMode:AVCaptureExposureModeAutoExpose];
+        } else {
+            RCTLogWarn(@"exposurePointOfInterest not supported");
+        }
+    }
+    
+    [device unlockForConfiguration];
+}
+
 - (void)updateFocusMode
 {
     AVCaptureDevice *device = [self.videoCaptureDeviceInput device];
@@ -552,6 +605,8 @@ static NSDictionary *defaultFaceDetectorOptions = nil;
             [self updateZoom];
             [self updateFocusMode];
             [self updateFocusDepth];
+            [self updateFocusPointOfInterest];
+            [self updateExposurePointOfInterest];
             [self updateWhiteBalance];
             [self.previewLayer.connection setVideoOrientation:orientation];
             [self _updateMetadataObjectsToRecognize];
