@@ -184,6 +184,10 @@ static NSDictionary *defaultFaceDetectorOptions = nil;
     AVCaptureDevice *device = [self.videoCaptureDeviceInput device];
     NSError *error = nil;
     
+    if (device.position == RNCameraTypeFront) {
+        return;
+    }
+    
     if (![device lockForConfiguration:&error]) {
         if (error) {
             RCTLogError(@"%s: %@", __func__, error);
@@ -221,10 +225,10 @@ static NSDictionary *defaultFaceDetectorOptions = nil;
         float x = [self.exposurePointOfInterest[@"x"] floatValue];
         float y = [self.exposurePointOfInterest[@"y"] floatValue];
         
-        if ([device isExposurePointOfInterestSupported] && [device isExposureModeSupported:AVCaptureExposureModeAutoExpose]) {
+        if ([device isExposurePointOfInterestSupported] && [device isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure]) {
             CGPoint exposurePoint = CGPointMake(x, y);
             [device setExposurePointOfInterest:exposurePoint];
-            [device setExposureMode:AVCaptureExposureModeAutoExpose];
+            [device setExposureMode:AVCaptureExposureModeContinuousAutoExposure];
         } else {
             RCTLogWarn(@"exposurePointOfInterest not supported");
         }
