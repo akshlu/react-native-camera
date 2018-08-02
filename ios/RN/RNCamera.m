@@ -13,6 +13,12 @@
 
 @property (nonatomic, assign, getter=isSessionPaused) BOOL paused;
 
+
+@property (nonatomic, strong) NSDictionary *takePictureOptions;
+@property (nonatomic, strong) RCTPromiseResolveBlock takePictureResolve;
+@property (nonatomic, strong) RCTPromiseRejectBlock takePictureReject;
+
+
 @property (nonatomic, strong) RCTPromiseResolveBlock videoRecordedResolve;
 @property (nonatomic, strong) RCTPromiseRejectBlock videoRecordedReject;
 @property (nonatomic, strong) id faceDetectorManager;
@@ -363,76 +369,38 @@ static NSDictionary *defaultFaceDetectorOptions = nil;
 }
 #endif
 
+
+- (void)captureOutput:(AVCapturePhotoOutput *)output didFinishProcessingPhoto:(AVCapturePhoto *)photo error:(NSError *)error {
+    
+    if (error && self.takePictureReject != nil) {
+        self.takePictureReject(@"E_IMAGE_CAPTURE_FAILED", @"Image could not be captured", error);
+        return;
+    }
+    
+    NSData *imageData = [photo fileDataRepresentation];
+    UIImage *takenImage = [UIImage imageWithData:imageData];
+
+    NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
+    float quality = 1.0;
+    NSData *takenImageData = UIImageJPEGRepresentation(takenImage, quality);
+    NSString *path = [RNFileSystem generatePathInDirectory:[[RNFileSystem cacheDirectoryPath] stringByAppendingPathComponent:@"Camera"] withExtension:@".jpg"];
+    response[@"uri"] = [RNImageUtils writeImage:takenImageData toPath:path];
+    response[@"width"] = @(takenImage.size.width);
+    response[@"height"] = @(takenImage.size.height);
+    response[@"base64"] = [takenImageData base64EncodedStringWithOptions:0];
+
+    self.takePictureResolve(response);
+}
+
 - (void)takePicture:(NSDictionary *)options resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject
 {
-    AVCaptureConnection *connection = [self.stillImageOutput connectionWithMediaType:AVMediaTypeVideo];
-    [connection setVideoOrientation:[RNCameraUtils videoOrientationForDeviceOrientation:[[UIDevice currentDevice] orientation]]];
-    [self.stillImageOutput captureStillImageAsynchronouslyFromConnection:connection completionHandler: ^(CMSampleBufferRef imageSampleBuffer, NSError *error) {
-        if (imageSampleBuffer && !error) {
-            NSData *imageData = [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:imageSampleBuffer];
-
-            UIImage *takenImage = [UIImage imageWithData:imageData];
-
-            CGRect frame = [_previewLayer metadataOutputRectOfInterestForRect:self.frame];
-            CGImageRef takenCGImage = takenImage.CGImage;
-            size_t width = CGImageGetWidth(takenCGImage);
-            size_t height = CGImageGetHeight(takenCGImage);
-            CGRect cropRect = CGRectMake(frame.origin.x * width, frame.origin.y * height, frame.size.width * width, frame.size.height * height);
-            takenImage = [RNImageUtils cropImage:takenImage toRect:cropRect];
-
-            if ([options[@"mirrorImage"] boolValue]) {
-                takenImage = [RNImageUtils mirrorImage:takenImage];
-            }
-            if ([options[@"forceUpOrientation"] boolValue]) {
-                takenImage = [RNImageUtils forceUpOrientation:takenImage];
-            }
-
-            if ([options[@"width"] integerValue]) {
-                takenImage = [RNImageUtils scaleImage:takenImage toWidth:[options[@"width"] integerValue]];
-            }
-
-            NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
-            float quality = [options[@"quality"] floatValue];
-            NSData *takenImageData = UIImageJPEGRepresentation(takenImage, quality);
-            NSString *path = [RNFileSystem generatePathInDirectory:[[RNFileSystem cacheDirectoryPath] stringByAppendingPathComponent:@"Camera"] withExtension:@".jpg"];
-            response[@"uri"] = [RNImageUtils writeImage:takenImageData toPath:path];
-            response[@"width"] = @(takenImage.size.width);
-            response[@"height"] = @(takenImage.size.height);
-
-            if ([options[@"base64"] boolValue]) {
-                response[@"base64"] = [takenImageData base64EncodedStringWithOptions:0];
-            }
-
-
-
-            if ([options[@"exif"] boolValue]) {
-                int imageRotation;
-                switch (takenImage.imageOrientation) {
-                    case UIImageOrientationLeft:
-                    case UIImageOrientationRightMirrored:
-                        imageRotation = 90;
-                        break;
-                    case UIImageOrientationRight:
-                    case UIImageOrientationLeftMirrored:
-                        imageRotation = -90;
-                        break;
-                    case UIImageOrientationDown:
-                    case UIImageOrientationDownMirrored:
-                        imageRotation = 180;
-                        break;
-                    case UIImageOrientationUpMirrored:
-                    default:
-                        imageRotation = 0;
-                        break;
-                }
-                [RNImageUtils updatePhotoMetadata:imageSampleBuffer withAdditionalData:@{ @"Orientation": @(imageRotation) } inResponse:response]; // TODO
-            }
-
-            resolve(response);
-        } else {
-            reject(@"E_IMAGE_CAPTURE_FAILED", @"Image could not be captured", error);
-        }
-    }];
+    self.takePictureResolve = resolve;
+    self.takePictureReject = reject;
+    
+    AVCapturePhotoSettings *settings = [[AVCapturePhotoSettings alloc] init];
+    [settings setAutoStillImageStabilizationEnabled:YES];
+    [settings setHighResolutionPhotoEnabled:YES];
+    [self.photoOutput capturePhotoWithSettings:settings delegate:self];
 }
 
 - (void)record:(NSDictionary *)options resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject
@@ -513,13 +481,10 @@ static NSDictionary *defaultFaceDetectorOptions = nil;
             return;
         }
 
-        AVCaptureStillImageOutput *stillImageOutput = [[AVCaptureStillImageOutput alloc] init];
-        if ([self.session canAddOutput:stillImageOutput]) {
-            stillImageOutput.outputSettings = @{AVVideoCodecKey : AVVideoCodecJPEG};
-            [self.session addOutput:stillImageOutput];
-            [stillImageOutput setHighResolutionStillImageOutputEnabled:YES];
-            self.stillImageOutput = stillImageOutput;
-        }
+        AVCapturePhotoOutput *photoOutput = [[AVCapturePhotoOutput alloc] init];
+        [photoOutput setHighResolutionCaptureEnabled:YES];
+        [self.session addOutput:photoOutput];
+        self.photoOutput = photoOutput;
 
 #if __has_include(<GoogleMobileVision/GoogleMobileVision.h>)
         [_faceDetectorManager maybeStartFaceDetectionOnSession:_session withPreviewLayer:_previewLayer];
@@ -628,8 +593,8 @@ static NSDictionary *defaultFaceDetectorOptions = nil;
     if (preset) {
         dispatch_async(self.sessionQueue, ^{
             [self.session beginConfiguration];
-            if ([self.session canSetSessionPreset:preset]) {
-                self.session.sessionPreset = preset;
+            if ([self.session canSetSessionPreset:AVCaptureSessionPresetPhoto]) {
+                self.session.sessionPreset = AVCaptureSessionPresetPhoto;
             }
             [self.session commitConfiguration];
         });
